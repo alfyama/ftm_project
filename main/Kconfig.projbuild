@@ -1,0 +1,23 @@
+menu "FTM Project Configuration"
+
+    config STA_MODE
+        bool "Station mode"
+        default n
+
+      config WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            SSID (network name) for the example to connect to.
+
+    config WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+        help
+            WiFi password (WPA or WPA2) for the example to use.
+
+    config AP_CHANNEL 
+        int "channel for AP" 
+        default 1
+
+endmenu
