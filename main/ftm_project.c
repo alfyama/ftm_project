@@ -80,6 +80,7 @@ static bool s_ap_started;
 static uint8_t s_ap_channel;
 static uint8_t s_ap_bssid[ETH_ALEN];
 
+int ftm(void);
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_id == WIFI_EVENT_STA_CONNECTED) {
@@ -92,6 +93,10 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         s_ap_channel = event->channel;
         xEventGroupClearBits(s_wifi_event_group, DISCONNECTED_BIT);
         xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
+
+        if(ESP_OK != ftm()){
+            ESP_LOGE(TAG_STA, "FTM failed!");
+        }
     } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (s_reconnect && ++s_retry_num < MAX_CONNECT_RETRY_ATTEMPTS) {
             ESP_LOGI(TAG_STA, "sta disconnect, retry attempt %d...", s_retry_num);
@@ -186,9 +191,48 @@ int perform_scan(void)
 
     free(g_ap_list_buffer);
     ESP_LOGI(TAG_STA, "sta scan done");
-    return 0;
+    return ESP_OK;
 
 }
+
+int ftm()
+{
+    int bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT, 0, 1, 0);
+    if (!(bits & CONNECTED_BIT)){
+        ESP_LOGE(TAG_STA, "Not connected. FTM only supported for connected AP.");
+        return ESP_FAIL;
+    }
+        
+    wifi_ftm_initiator_cfg_t ftm_cfg = {
+        .frm_count = 32,
+        .burst_period = 2,
+        .channel = s_ap_channel,
+    };
+    memcpy(ftm_cfg.resp_mac, s_ap_bssid, ETH_ALEN);
+
+    ESP_LOGI(TAG_STA, "Requesting FTM session with Frm Count - %d, Burst Period - %dmSec (0: No Preference)",
+                ftm_cfg.frm_count, ftm_cfg.burst_period*100);
+
+    if(ESP_OK != esp_wifi_ftm_initiate_session(&ftm_cfg)){
+        ESP_LOGE(TAG_STA, "Failed to start FTM session");
+        return ESP_FAIL;
+    }
+
+    bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT | FTM_FAILURE_BIT,
+                                            pdTRUE, pdFALSE, portMAX_DELAY);
+    if (bits & FTM_REPORT_BIT)
+    {
+        ESP_LOGI(TAG_STA,
+            "Estimated RTT - %" PRId32 " nSec,\
+            Estimated Distance - %" PRId32 ".%02" PRId32 " meters",
+            s_rtt_est, s_dist_est / 100, s_dist_est % 100);
+        return ESP_OK;
+    } else {
+        return ESP_FAIL;
+    }
+}
+
+
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
@@ -208,7 +252,6 @@ void app_main(void)
     wifi_config_t wifi_config = {
         .sta.ssid = WIFI_SSID,
         .sta.password = WIFI_PASSWORD,
-
     };
 
     s_reconnect = true;
