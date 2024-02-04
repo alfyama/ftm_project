@@ -153,6 +153,42 @@ static void init_wifi(void) {
     initialized = true;
 }
 
+int perform_scan(void)
+{
+    ESP_LOGI(TAG_STA, "Performing AP scan.");
+    wifi_scan_config_t scan_config = { 0 };
+    if (ESP_OK != esp_wifi_scan_start(&scan_config, true)){
+        ESP_LOGI(TAG_STA, "Scan failed.");
+        return 1;
+    }
+
+    uint16_t g_scan_ap_num;
+    esp_wifi_scan_get_ap_num(&g_scan_ap_num);
+    if(g_scan_ap_num == 0)
+    {
+        ESP_LOGI(TAG_STA, "No APs found.");
+        return 1;
+    }
+
+    wifi_ap_record_t *g_ap_list_buffer;
+    g_ap_list_buffer = malloc(g_scan_ap_num * sizeof(wifi_ap_record_t));
+    if (g_ap_list_buffer == NULL) {
+        ESP_LOGE(TAG_STA, "Failed to malloc buffer to print scan results");
+        return 1;
+    }
+
+    if (esp_wifi_scan_get_ap_records(&g_scan_ap_num, (wifi_ap_record_t *)g_ap_list_buffer) == ESP_OK) {
+        for (uint8_t i = 0; i < g_scan_ap_num; i++) {
+            ESP_LOGI(TAG_STA, "[%s][rssi=%d]""%s", g_ap_list_buffer[i].ssid, g_ap_list_buffer[i].rssi,
+                        g_ap_list_buffer[i].ftm_responder ? "[FTM Responder]" : "");
+        }
+    }
+
+    free(g_ap_list_buffer);
+    ESP_LOGI(TAG_STA, "sta scan done");
+    return 0;
+
+}
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
@@ -180,7 +216,10 @@ void app_main(void)
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+    if(perform_scan())    
+        ESP_LOGW(TAG_STA, "Scan failed. Connecting anyway.");
     ESP_ERROR_CHECK(esp_wifi_connect());
+
 
 
 
