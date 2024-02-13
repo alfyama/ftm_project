@@ -17,7 +17,7 @@
 
 #define STA_MODE       CONFIG_STA_MODE
 
-
+ESP_EVENT_DEFINE_BASE(END_SCAN_OR_FTM_EVENT);
 static bool s_reconnect = true;
 static int s_retry_num = 5;
 
@@ -204,9 +204,16 @@ static esp_err_t perform_scan(const char *ssid, uint8_t num_anchors)
         for (uint8_t i = 0; i < g_scan_ap_num; i++) {
             ESP_LOGI(TAG_STA, "[%s][rssi=%d]""%s", g_ap_list_buffer[i].ssid, g_ap_list_buffer[i].rssi,
                         g_ap_list_buffer[i].ftm_responder ? "[FTM Responder]" : "");
+
+            // TODO Just add access points to the buffer that 
+            // we have configured, ignore all others 
             if(num_anchors < MAX_APS && g_ap_list_buffer[i].ftm_responder){
-                aps[num_anchors] = g_ap_list_buffer[i];
-                num_anchors++;
+
+                int comp = strcmp((char *)g_ap_list_buffer[i].ssid, WIFI_SSID);
+                if(comp == 0){
+                    aps[num_anchors] = g_ap_list_buffer[i];
+                    num_anchors++;
+                }
             }
             
         }
@@ -229,11 +236,13 @@ static int process_aps(uint8_t num_anchors, uint8_t current_anchor) {
 
 int ftm(wifi_ap_record_t *ap_record)
 {
-    int bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT, 0, 1, 0);
-    if (!(bits & CONNECTED_BIT)){
-        ESP_LOGE(TAG_STA, "Not connected. FTM only supported for connected AP.");
-        return ESP_FAIL;
-    }
+    /* int bits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT, 0, 1, 0); */
+    /* if (!(bits & CONNECTED_BIT)){ */
+    /*     ESP_LOGE(TAG_STA, "Not connected. FTM only supported for connected AP."); */
+    /*     return ESP_FAIL; */
+    /* } */
+
+    ESP_LOGI(TAG_STA, "FTM start...");
         
     wifi_ftm_initiator_cfg_t ftm_cfg = {
         .frm_count = 32,
@@ -241,28 +250,45 @@ int ftm(wifi_ap_record_t *ap_record)
         .channel = s_ap_channel,
     };
 
-    memcpy(ftm_cfg.resp_mac, ap_record->bssid, ETH_ALEN);
+    if(ap_record){
+        memcpy(ftm_cfg.resp_mac, ap_record->bssid, ETH_ALEN);
+    }
+    
+    else {
+        ESP_LOGE(TAG_STA, "NOT AP RECORD");
+        ESP_ERROR_CHECK(esp_event_post( END_SCAN_OR_FTM_EVENT, 0, NULL, 0,pdMS_TO_TICKS(100)));
+    }
 
-    ESP_LOGI(TAG_STA, "Requesting FTM session with Frm Count - %d, Burst Period - %dmSec (0: No Preference)",
-                    ftm_cfg.frm_count, ftm_cfg.burst_period*100);
-
-    if(ESP_OK != esp_wifi_ftm_initiate_session(&ftm_cfg)){
+    if (ESP_OK != esp_wifi_ftm_initiate_session(&ftm_cfg)) {
         ESP_LOGE(TAG_STA, "Failed to start FTM session");
+        ESP_ERROR_CHECK(esp_event_post( END_SCAN_OR_FTM_EVENT, 0, NULL, 0,pdMS_TO_TICKS(100)));
         return ESP_FAIL;
     }
 
-    bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT | FTM_FAILURE_BIT,
-                                            pdTRUE, pdFALSE, portMAX_DELAY);
-    if (bits & FTM_REPORT_BIT)
-    {
-        ESP_LOGI(TAG_STA,
-            "Estimated RTT - %" PRId32 " nSec,\
-            Estimated Distance - %" PRId32 ".%02" PRId32 " meters",
-            s_rtt_est, s_dist_est / 100, s_dist_est % 100);
-        return ESP_OK;
-    } else {
-        return ESP_FAIL;
-    }
+
+
+    /* ESP_LOGI(TAG_STA, "Requesting FTM session with Frm Count - %d, Burst Period - %dmSec (0: No Preference)", */
+    /*                 ftm_cfg.frm_count, ftm_cfg.burst_period*100); */
+    /*  */
+    /* if(ESP_OK != esp_wifi_ftm_initiate_session(&ftm_cfg)){ */
+    /*     ESP_LOGE(TAG_STA, "Failed to start FTM session"); */
+    /*     return ESP_FAIL; */
+    /* } */
+
+    /* bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT | FTM_FAILURE_BIT, */
+    /*                                         pdTRUE, pdFALSE, portMAX_DELAY); */
+    /* if (bits & FTM_REPORT_BIT) */
+    /* { */
+    /*     ESP_LOGI(TAG_STA, */
+    /*         "Estimated RTT - %" PRId32 " nSec,\ */
+    /*         Estimated Distance - %" PRId32 ".%02" PRId32 " meters", */
+    /*         s_rtt_est, s_dist_est / 100, s_dist_est % 100); */
+    /*     return ESP_OK; */
+    /* } else { */
+    /*     return ESP_FAIL; */
+    /* } */
+
+    return ESP_OK;
 }
 
 
@@ -300,7 +326,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     
     // TODO ssid should be the same as APs ??
-    if(perform_scan(NULL, num_anchors))    
+    if(perform_scan(WIFI_SSID, num_anchors))    
         ESP_LOGW(TAG_STA, "Scan failed. Connecting anyway.");
     ESP_ERROR_CHECK(esp_wifi_connect());
 
