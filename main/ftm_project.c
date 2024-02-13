@@ -127,9 +127,22 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 }
 
 static void ftm_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-
-
-
+    wifi_event_ftm_report_t *event = (wifi_event_ftm_report_t *) event_data;
+    
+    #if STA_MODE
+    if(event -> status == FTM_STATUS_SUCCESS)
+    {
+        uint32_t s_dist_est = event -> dist_est;
+        uint32_t s_rtt_est = event -> rtt_est;
+        ESP_LOGI(TAG_STA, "Got ftm response: rtt: %"PRId32" distance: %"PRId32"", s_rtt_est, s_dist_est);
+    }
+    else
+    {
+        ESP_LOGI(TAG_STA, "FTM error");
+    }
+    #else
+    ESP_LOGI(TAG_AP, "Got ftm request");
+    #endif
 }
 
 static void init_wifi(void) {
@@ -341,6 +354,10 @@ void app_main(void)
 
         if(bits & FTM_REPORT_BIT) {
             // TODO ftm report 
+           free(s_ftm_report);
+           s_ftm_report = NULL;
+           s_ftm_report_num_entries = 0;
+
             
             vTaskDelay(20);
         }
