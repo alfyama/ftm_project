@@ -250,11 +250,11 @@ int ftm(wifi_ap_record_t *ap_record)
     wifi_ftm_initiator_cfg_t ftm_cfg = {
         .frm_count = 32,
         .burst_period = 2,
-        .channel = s_ap_channel,
     };
 
     if(ap_record){
         memcpy(ftm_cfg.resp_mac, ap_record->bssid, ETH_ALEN);
+        ftm_cfg.channel = ap_record->primary;
     }
     
     else {
