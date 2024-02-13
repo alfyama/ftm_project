@@ -167,7 +167,7 @@ static void init_wifi(void) {
                                                         NULL));
 
     #if !STA_MODE
-        ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_AP, CURRENT_BW));
+        // ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_AP, CURRENT_BW));
     #endif
 
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
@@ -262,8 +262,9 @@ int ftm(wifi_ap_record_t *ap_record)
         ESP_ERROR_CHECK(esp_event_post( END_SCAN_OR_FTM_EVENT, 0, NULL, 0,pdMS_TO_TICKS(100)));
     }
 
-    if (ESP_OK != esp_wifi_ftm_initiate_session(&ftm_cfg)) {
-        ESP_LOGE(TAG_STA, "Failed to start FTM session");
+    esp_err_t err = esp_wifi_ftm_initiate_session(&ftm_cfg);
+    if (ESP_OK != err) {
+        ESP_LOGE(TAG_STA, "Failed to start FTM session with %i", err);
         ESP_ERROR_CHECK(esp_event_post( END_SCAN_OR_FTM_EVENT, 0, NULL, 0,pdMS_TO_TICKS(100)));
         return ESP_FAIL;
     }
