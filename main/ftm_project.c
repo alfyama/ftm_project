@@ -67,8 +67,11 @@ static EventGroupHandle_t s_ftm_event_group;
 static const int CONNECTED_BIT = BIT0;
 static const int DISCONNECTED_BIT = BIT1;
 
+#if STA_MODE
 static const int FTM_REPORT_BIT = BIT0;
 static const int FTM_FAILURE_BIT = BIT1;
+
+#endif /* if STA_MODE */
 
 #define MAX_CONNECT_RETRY_ATTEMPTS 5
 #define ETH_ALEN 6
@@ -368,21 +371,26 @@ void app_main(void)
 
     wifi_config_t ap_config = {
 
-        .ap.ssid = "",
+        .ap.ssid = WIFI_SSID,
         .ap.ssid_len = 0,
-        .ap.password = "",
+        .ap.password = WIFI_PASSWORD,
         .ap.channel = AP_CHANNEL,
         .ap.max_connection = 4,
         .ap.authmode = WIFI_AUTH_WPA2_PSK,
         .ap.ftm_responder = true
     };
 
-    strlcpy((char *)ap_config.ap.ssid, mac_add, sizeof(ap_config.ap.ssid));
-    strlcpy((char *)ap_config.ap.password, WIFI_PASSWORD, sizeof(ap_config.ap.password));
+    /* strlcpy((char *)ap_config.ap.ssid, mac_add, sizeof(ap_config.ap.ssid)); */
+    /* strlcpy((char *)ap_config.ap.password, WIFI_PASSWORD, sizeof(ap_config.ap.password)); */
    
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
+
+    /* while (1)  */
+    /* { */
+    /*     vTaskDelay(1000); */
+    /* } */
 
     /* ESP_ERROR_CHECK(esp_wifi_get_bandwith(ESP_IF_WIFI_AP, &bw)); */
     
