@@ -88,7 +88,7 @@ wifi_ap_record_t *g_ap_list_buffer;
 wifi_ap_record_t aps[MAX_APS];
 
 
-const wifi_bandwidth_t CURRENT_BW = WIFI_BW_HT20;
+const wifi_bandwidth_t CURRENT_BW = WIFI_BW_HT40;
 
 
 
@@ -138,7 +138,7 @@ static void ftm_event_handler(void *arg, esp_event_base_t event_base, int32_t ev
     }
     else
     {
-        ESP_LOGI(TAG_STA, "FTM error");
+        ESP_LOGI(TAG_STA, "FTM error %i", event -> status);
     }
     #else
     ESP_LOGI(TAG_AP, "Got ftm request");
@@ -179,9 +179,6 @@ static void init_wifi(void) {
                                                         NULL,
                                                         NULL));
 
-    #if !STA_MODE
-        // ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_AP, CURRENT_BW));
-    #endif
 
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
@@ -349,25 +346,29 @@ void app_main(void)
 
     for(;;){
 
-        process_aps(num_anchors, current_anchor);
+        if(ESP_OK != process_aps(num_anchors, current_anchor))
+            ESP_LOGI(TAG_STA, "process_aps failed");
+        ESP_LOGI(TAG_STA, "test1");
         EventBits_t bits = xEventGroupWaitBits(s_ftm_event_group, FTM_REPORT_BIT|FTM_FAILURE_BIT, pdFALSE, pdFALSE, xTicksToWaitFTM);
 
         if(bits & FTM_REPORT_BIT) {
             // TODO ftm report 
-           free(s_ftm_report);
-           s_ftm_report = NULL;
-           s_ftm_report_num_entries = 0;
-
+            free(s_ftm_report);
+            s_ftm_report = NULL;
+            s_ftm_report_num_entries = 0;
+            ESP_LOGI(TAG_STA, "FTM succeeded");
             
             vTaskDelay(20);
         }
         else if (bits & FTM_FAILURE_BIT) {
               xEventGroupClearBits(s_ftm_event_group, FTM_FAILURE_BIT);
+            ESP_LOGI(TAG_STA, "FTM failed with failure bit");
 
               esp_restart();
         }
 
         else {
+            ESP_LOGI(TAG_STA, "FTM something else failed");
             vTaskDelay(20);
         }
         xEventGroupClearBits(s_ftm_event_group, FTM_REPORT_BIT);
@@ -380,7 +381,7 @@ void app_main(void)
     uint8_t mac[6];
     char mac_add[17];
 
-    wifi_bandwidth_t bw;
+    // wifi_bandwidth_t bw;
 
     ESP_LOGI(TAG_AP,"Starting AP...");
 
@@ -404,6 +405,10 @@ void app_main(void)
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_AP, CURRENT_BW));
+
+    ESP_LOGI(TAG_AP, "starting AP SSID: %s, Password: %s, Channel: %d, Bandwidth %dMHz",
+            WIFI_SSID, WIFI_PASSWORD, AP_CHANNEL, CURRENT_BW);
 
     /* while (1)  */
     /* { */
